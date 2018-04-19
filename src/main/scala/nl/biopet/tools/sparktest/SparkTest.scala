@@ -50,7 +50,7 @@ object SparkTest extends ToolCommand[Args] {
       s"Context is up, see ${sparkSession.sparkContext.uiWebUrl.getOrElse("")}")
 
     val samples = sc.broadcast(vcf.getSampleIds(cmdArgs.inputFile).toArray)
-    val regions = sc.broadcast(BedRecordList.fromReference(cmdArgs.reference).allRecords.toList)
+    val regions = sc.broadcast(BedRecordList.fromReference(cmdArgs.reference).scatter(500000).flatten)
     val variants = spark.vcf.loadRecords(cmdArgs.inputFile, regions, 500000, sorting = false, cached = false)
     val data = variants.mapPartitionsWithIndex { case (idx, it) =>
       val buffers: Map[String, ListBuffer[Int]] = samples.value.map(_ -> ListBuffer[Int]()).toMap
