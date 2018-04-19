@@ -35,6 +35,12 @@ class SparkTestTest extends ToolTest[Args] {
 
   @Test
   def testDefault(): Unit = {
-    SparkTest.main(Array("-i", resourcePath("/chrQ.vcf.gz"), "-R", resourcePath("/fake_chrQ.fa"), "--sparkMaster", "local[1]"))
+    SparkTest.main(
+      Array("-i",
+            resourcePath("/chrQ.vcf.gz"),
+            "-R",
+            resourcePath("/fake_chrQ.fa"),
+            "--sparkMaster",
+            "local[1]"))
   }
 }
