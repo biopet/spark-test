@@ -21,6 +21,8 @@
 
 package nl.biopet.tools.sparktest
 
+import java.io.{File, PrintWriter}
+
 import nl.biopet.utils.tool.ToolCommand
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.sql.SparkSession
@@ -28,8 +30,10 @@ import nl.biopet.utils.spark
 import nl.biopet.utils.ngs.vcf
 import nl.biopet.utils.ngs.intervals.BedRecordList
 import org.apache.spark.ml.clustering.BisectingKMeans
+import org.apache.spark.ml.linalg
 import org.apache.spark.ml.linalg.Vectors
 
+import scala.concurrent.ExecutionContext.Implicits.global
 import scala.collection.mutable.ListBuffer
 import scala.collection.JavaConversions._
 import scala.concurrent.Future
@@ -51,10 +55,12 @@ object SparkTest extends ToolCommand[Args] {
       s"Context is up, see ${sparkSession.sparkContext.uiWebUrl.getOrElse("")}")
 
     val samples = sc.broadcast(vcf.getSampleIds(cmdArgs.inputFile).toArray)
-    val regions = sc.parallelize(
-      BedRecordList.fromReference(cmdArgs.reference).scatter(500000))
+    val regions = BedRecordList.fromReference(cmdArgs.reference).scatter(500000)
+    val regionsRdd = sc.parallelize(
+      BedRecordList.fromReference(cmdArgs.reference).scatter(500000),
+      regions.size)
     val variants =
-      regions.flatMap(r => vcf.loadRegions(cmdArgs.inputFile, r.iterator))
+      regionsRdd.flatMap(r => vcf.loadRegions(cmdArgs.inputFile, r.iterator))
     val data = variants
       .mapPartitionsWithIndex {
         case (idx, it) =>
@@ -83,9 +89,9 @@ object SparkTest extends ToolCommand[Args] {
         case (sample, list) =>
           val vector = Vectors.dense(
             list.toArray.sortBy(_._1).flatMap(_._3).map(_.toDouble))
-          sample -> vector
+          Sample(sample, vector)
       }
-      .toDF("sample", "features")
+      .toDS()
     if (cmdArgs.withCache) {
       data.cache()
       Future(data.count())
@@ -94,11 +100,23 @@ object SparkTest extends ToolCommand[Args] {
     val bkm = new BisectingKMeans()
       .setK(5)
       .setSeed(12345)
-
+    cmdArgs.maxIterations.foreach(bkm.setMaxIter)
     val model = bkm.fit(data)
+
+    val predictions = model.transform(data).as[Prediction]
+    predictions.rdd.groupBy(_.prediction).foreach {
+      case (group, s) =>
+        val writer =
+          new PrintWriter(new File(cmdArgs.outputDir, group + ".cluster.txt"))
+        s.map(_.name).foreach(writer.println)
+        writer.close()
+    }
 
     logger.info("Done")
   }
+
+  case class Sample(name: String, features: linalg.Vector)
+  case class Prediction(name: String, features: linalg.Vector, prediction: Int)
 
   def argsParser: ArgsParser = new ArgsParser(this)
 

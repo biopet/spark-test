@@ -21,6 +21,8 @@
 
 package nl.biopet.tools.sparktest
 
+import java.io.File
+
 import nl.biopet.utils.test.tools.ToolTest
 import org.testng.annotations.Test
 
@@ -35,9 +37,14 @@ class SparkTestTest extends ToolTest[Args] {
 
   @Test
   def testDefault(): Unit = {
+    val outputDir = File.createTempFile("test.", ".out")
+    outputDir.delete()
+    outputDir.mkdir()
     SparkTest.main(
       Array("-i",
             resourcePath("/chrQ.vcf.gz"),
+            "-o",
+            outputDir.getAbsolutePath,
             "-R",
             resourcePath("/fake_chrQ.fa"),
             "--sparkMaster",
