@@ -57,9 +57,9 @@ object SparkTest extends ToolCommand[Args] {
       it.foreach { record =>
         val alleles = record.getAlleles.indices
         buffers.foreach { case (sample, buf) =>
-          val ad = Option(record.getGenotype(sample)).flatMap(x => Option(x.getAnyAttribute("AD"))) match {
-            case Some(x: List[Int]) => x
-            case _ => List.fill(alleles.size)(0)
+          val ad = Option(record.getGenotype(sample)).flatMap(x => Option(x.getAD)) match {
+            case Some(l) => l
+            case _ => Array.fill(alleles.size)(0)
           }
           alleles.foreach { i =>
             buf.add(ad.lift(i).getOrElse(0))
